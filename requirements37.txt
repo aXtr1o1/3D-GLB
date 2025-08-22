@@ -1,0 +1,105 @@
+# --- Core ---
+pip==24.0
+setuptools==68.0.0
+wheel==0.42.0
+
+# --- Data Science ---
+numpy==1.21.6
+scipy==1.6.3
+pandas==1.3.5
+scikit-learn==1.0.2
+joblib==1.3.2
+future==1.0.0
+sympy==1.10.1
+
+# --- Image / Video ---
+scikit-image==0.19.3
+pillow==9.5.0
+imageio==2.31.2
+imageio-ffmpeg==0.4.7
+opencv-python==4.5.3.56
+opencv-python-headless==4.1.1.26
+moviepy==1.0.3
+cairosvg==2.5.2
+
+# --- PyTorch with CUDA 11.7 ---
+--extra-index-url https://download.pytorch.org/whl/cu117
+torch==1.13.1+cu117
+torchvision==0.14.1+cu117
+torchaudio==0.13.1
+
+# --- Deep Learning ---
+tensorflow==2.10.0
+tensorflow-estimator==2.10.0
+tensorflow-io-gcs-filesystem==0.31.0
+keras==2.10.0
+keras-preprocessing==1.1.2
+keras-applications==1.0.8
+onnxruntime==1.14.1
+tensorboard==2.10.1
+
+# --- Web Frameworks ---
+flask==2.2.5
+fastapi==0.78.0
+uvicorn==0.18.3
+starlette==0.19.1
+aiohttp==3.8.6
+aiofiles==22.1.0
+httpx==0.23.3
+httpcore==0.16.3
+
+# --- Auth & Networking ---
+requests==2.25.1
+requests-oauthlib==2.0.0
+urllib3==1.26.20
+idna==2.10
+certifi==2025.4.26
+chardet==4.0.0
+charset-normalizer==2.1.1
+pySocks==1.7.1
+
+# --- Gradio ---
+gradio==3.16.2
+gradio_client==0.2.6
+
+# --- ASGI ---
+h11==0.14.0
+nest-asyncio==1.6.0
+
+# --- Serialization ---
+pyyaml==5.1.1
+pydantic==1.10.13
+jsonschema==4.17.3
+attrs==22.2.0
+pyparsing==3.1.4
+packaging==24.0
+
+# --- Utility ---
+matplotlib==3.5.3
+seaborn==0.11.2
+tqdm==4.60.0
+click==8.1.8
+pygments==2.17.2
+werkzeug==2.2.3
+pyzmq==23.2.1
+tornado==6.2
+pyttsx3==2.90
+
+# --- Security / Proto ---
+pyasn1==0.5.1
+pyasn1-modules==0.3.0
+protobuf==3.19.6
+
+# --- Import Helpers ---
+importlib-metadata==4.13.0
+importlib-resources==5.12.0
+
+# --- FFmpeg wrapper ---
+ffmpeg-python==0.2.0
+
+kornia
+yacs
+face_alignment
+chumpy
+dlib 
+cmake -3.13.1

@@ -1,2 +1,175 @@
-# 3D-GLB
-Generate realistic, low-polygon .glb avatars from a single front-facing selfie — fully automated, Dockerized, and ready for use in educational VR/metaverse environments.
+
+# 3D GLB Generator Project
+
+This project takes a face photo and generates a 3D `.glb` file using deep learning models integrated through an API.
+
+---
+
+## 🔧 System Requirements
+
+Before starting, make sure your system has:
+
+- **CUDA 11.7** installed and properly configured (for GPU acceleration)
+- **Python 3.7.9** and **Python 3.11.0** both installed
+- **Visual Studio Community 2019** installed with:
+  - ✅ Desktop Development with C++ workload enabled
+  - ✅ Windows 11 SDK selected during setup
+
+---
+
+## 📁 Project Setup
+
+### 1. Clone This GitHub Repository
+
+Open a terminal or command prompt and run:
+
+```bash
+git clone https://github.com/your-username/3d-glb-project.git
+cd 3d-glb-project
+````
+
+---
+
+### 2. Download Model Checkpoints (Required for Inference)
+
+* 📥 Download the pretrained model files from this Google Drive link:
+
+  👉 [Download Models](https://drive.google.com/file/d/1CAcvtqD8XTkjr9C-6G4L12dkQVDZxQkz/view?usp=sharing)
+
+* Once downloaded:
+
+  * Unzip the folder.
+  * You will find two subfolders:
+
+    * `DECA_data`
+    * `hairmapper_ckpts`
+
+---
+
+### 3. Place the Model Files Correctly
+
+After unzipping:
+
+* 🗂️ Copy **everything inside `DECA_data`** and paste it into:
+
+  ```
+  DECA/data/
+  ```
+
+  > ℹ️ Tip: Make sure you're pasting the **contents**, not the folder itself.
+
+* 🗂️ Copy **everything inside `hairmapper_ckpts`** and paste it into:
+
+  ```
+  hair_mapper/HairMapper/ckpts/
+  ```
+
+---
+
+## 📦 Python Environment Setup
+
+You will need both Python 3.7.9 and 3.11.0 for different parts of the project.
+
+### A. Set up Python 3.7.9 Environment
+
+Use this to install dependencies for older models:
+
+```bash
+pip install -r requirements37.txt
+```
+
+### B. Set up Python 3.11.0 Environment
+
+Use this for updated modules:
+
+```bash
+pip install -r requirements311.txt
+```
+
+> 💡 Tip: Consider using [virtualenv](https://virtualenv.pypa.io/en/latest/) or [pyenv](https://github.com/pyenv/pyenv) to manage multiple Python versions easily.
+
+---
+
+## ▶️ Running the Project
+
+### 1. Prepare Input Image
+
+* Put a clear, front-facing **face photo** in the `input/` folder.
+* Supported formats: `.jpg` or `.png`
+* Recommended: Image should be well-lit and high resolution.
+
+---
+
+### 2. Start the API Server
+
+From the project root directory, run:
+
+```bash
+python docker_api.py
+```
+
+* This will start a local server and print an endpoint URL in the terminal.
+* The server listens for POST requests containing gender input.
+
+---
+
+## 📬 Testing the API
+
+You can test it using **Postman** or any REST client.
+
+### A. Sample Request
+
+* **Method:** `POST`
+
+* **URL:** `http://localhost:<your-port>/`
+
+* **Headers:**
+  `Content-Type: application/json`
+
+* **Body (raw JSON):**
+
+```json
+{
+  "gender": "male"
+}
+```
+
+> 🔁 You can also use `"female"` as the value for gender.
+
+---
+
+### B. Output Location
+
+* After a successful run, your 3D `.glb` model will be saved to:
+
+  ```
+  blender/output/
+  ```
+
+---
+
+## ✅ Final Checklist
+
+Before running, confirm that:
+
+* [ ] CUDA 11.7 is installed and working
+* [ ] Python 3.7.9 and 3.11.0 are both installed
+* [ ] Visual Studio 2019 is set up with required components
+* [ ] You cloned the GitHub repository
+* [ ] You downloaded and placed the model files in the correct folders
+* [ ] Dependencies are installed using the correct `requirements*.txt` files
+* [ ] Input image is placed in `input/` folder
+* [ ] API server is running (`docker_api.py`)
+* [ ] You tested the endpoint with a valid JSON using Postman
+
+---
+
+## 🙋 Need Help?
+
+If you face issues:
+
+* Check for folder structure errors (e.g., content not placed properly)
+* Confirm you're using the right Python version
+* Check terminal output for clear errors
+* Raise an issue in the GitHub repo
+
