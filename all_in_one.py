@@ -63,8 +63,8 @@ def move_deca_result(base_dir, obj_destination, png_destination1):
 
 # Use system's default Python interpreter
 python_executable = sys.executable
-python_37 = r"C:\Users\sanje_3wfdh8z\AppData\Local\Programs\Python\Python37\python.exe"
-python_311 = r"C:\Users\sanje_3wfdh8z\AppData\Local\Programs\Python\Python311\python.exe"
+python_37 = r"C:\Users\tamil\AppData\Local\Programs\Python\Python37\python.exe"
+python_311 = r"C:\Users\tamil\AppData\Local\Programs\Python\Python311\python.exe"
 
 
 
@@ -84,6 +84,8 @@ async def main_function(gender, websocket=None):
                 step["command"]()
             else:
                 result = subprocess.run(step["command"], cwd=step["dir"])
+                print(result.stdout)
+                print(result.stderr)
                 if result.returncode != 0:
                     await send_progress(f"❌ Failed at step: {' '.join(step['command'])}")
                     return False
@@ -91,7 +93,6 @@ async def main_function(gender, websocket=None):
             await send_progress(f"🔥 Exception at {step['dir']}: {str(e)}")
             return False
         return True
-# def main_function(gender):
         
 
     commands = [
@@ -113,7 +114,6 @@ async def main_function(gender, websocket=None):
                 "aligned_images"
             ]
         },
-        #removing raw_image
         {
             "title": "Cleaning image",
             "dir": "hair_mapper/stylegan-encoder",
@@ -168,7 +168,6 @@ async def main_function(gender, websocket=None):
             ]
         },
 
-        #removing raw_image
         {
             "title": "Removing raw image",
             "dir": "hair_mapper/HairMapper/test_data",
@@ -194,92 +193,16 @@ async def main_function(gender, websocket=None):
                 "--useTex", "True"
             ]
         },
-        {
-            "title": "Moving",
-            "dir": ".",
-            "command": lambda: (
-                move_deca_result("DECA/TestSamples/examples/results", "Blender/ready to use model/head", "Texture/input"),
-                [os.remove(f) for f in glob.glob("DECA/TestSamples/examples/*.png")]
-            ) and None  # forces lambda to return None
-        },
-
-
-        {
-            "title": "Applying Textures",
-            "dir": "Texture",
-            "command": [
-                python_311,
-                "texture.py",
-            ]
-        },
-        {
-            "title": "Cleaning",
-            "dir": "Texture",
-            "command": [
-                python_311,
-                "-c",
-                "import os, glob; [os.remove(f) for f in glob.glob('input/*.png')]"
-            ]
-        },
-
-        {
-            "title": "Moving",
-            "dir": ".",  
-            "command": lambda: shutil.move(
-                "Texture/output/final_texture.jpeg",
-                "Blender/ready to use model/head/final_texture.jpeg"
-            )
-        },
-        {
-            "title": "Texture moving",
-            "dir": ".",  
-            "command": lambda: shutil.move(
-                "Texture/output/blend_image.jpg",
-                "Blender/Texture_body/input/blend_image.jpg"
-            )
-
-
-        },
-
-
-        {
-            "title": "body Importing",
-            "dir": "Blender/Texture_body",
-            "command": [
-                python_311,
-                "texture_body.py",
-            ]
-        },
-       
-        {
-            "title": "Final Rendering",
-            "dir": "Blender",
-            "command": [
-                python_311,
-                "blender_merging.py",
-                "--g",
-                gender,
-            ]
-        },
-        {
-            "title": "Output",
-            "dir": "Blender/ready to use model/head",
-            "command": lambda: (
-                [os.remove(os.path.join("Blender/ready to use model/head", f)) 
-                for f in os.listdir("Blender/ready to use model/head") 
-                if os.path.isfile(os.path.join("Blender/ready to use model/head", f))]
-            )
-        },
-
 
     ]
 
-    # Run each command
-        # Execute all steps with progress
     for index, step in enumerate(commands):
         success = await run_command(step, index)
         if not success:
             break
 
     await send_progress("✅ Avatar generation completed.")
+    
+import asyncio
+asyncio.run( main_function(gender="male"))
     

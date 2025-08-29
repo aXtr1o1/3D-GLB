@@ -82,6 +82,12 @@ pip install -r requirements37.txt
 
 Use this for updated modules:
 
+Use this if your facing a error on dlib 
+
+set CMAKE_GENERATOR=Ninja
+set CMAKE_ARGS=-DCMAKE_POLICY_VERSION_MINIMUM=3.5
+pip install dlib==19.24.2 --no-build-isolation
+
 ```bash
 pip install -r requirements311.txt
 ```
