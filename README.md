@@ -120,16 +120,16 @@ hair_mapper/stylegan-encoder/raw_images
 ```
 check for this folder sometimes git doesnt add empty folder soo it might will be removed if soo add these
 ```
-### If you're using the .bat file make sure you change this to your system config
+### If you're using the .bat file make sure you change this in run_pipeline.bat to your system config
 
-REM ==== CONFIG (portable) ====
-set "ROOT=%~dp0"
-if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
-set "PY37=C:\Users\sanje_3wfdh8z\AppData\Local\Programs\Python\Python37\python.exe"
-set "PY311=C:\Users\sanje_3wfdh8z\AppData\Local\Programs\Python\Python311\python.exe"
-set "VCVARS=C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"
-set "CUDA_HOME=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.7"
-REM ===========================
+* REM ==== CONFIG (portable) ====
+* set "ROOT=%~dp0"
+* if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
+* set "PY37=C:\Users\sanje_3wfdh8z\AppData\Local\Programs\Python\Python37\python.exe"
+* set "PY311=C:\Users\sanje_3wfdh8z\AppData\Local\Programs\Python\Python311\python.exe"
+* set "VCVARS=C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"
+* set "CUDA_HOME=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.7"
+* REM ===========================
 
 
 ## ▶️ Running the Project
