@@ -103,7 +103,7 @@ kornia
 yacs
 face_alignment
 chumpy
-#cmake ==3.13.1
+cmake ==3.13.1
 # cmake==3.24.3
 # dlib==19.24.2
 

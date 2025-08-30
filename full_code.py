@@ -5,6 +5,9 @@ import shutil
 import os
 import glob
 import argparse
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def move_resources(src_dir,dst_dir):
@@ -18,53 +21,68 @@ def move_resources(src_dir,dst_dir):
             shutil.move(src_path, dst_path)
 
 
-def move_deca_result(base_dir, obj_destination, png_destination1):
+def move_deca_result(base_dir, obj_destination, tex_destination):
+    # ensure destinations exist
+    os.makedirs(obj_destination, exist_ok=True)
+    os.makedirs(tex_destination, exist_ok=True)
+
     all_dirs = [
         os.path.join(base_dir, d) for d in os.listdir(base_dir)
         if os.path.isdir(os.path.join(base_dir, d))
     ]
-
     if not all_dirs:
-        print("No folders found in results.")
-    else:
-        dynamic_folder = max(all_dirs, key=os.path.getmtime)
-        folder_name = os.path.basename(dynamic_folder)
+        raise FileNotFoundError(f"No result folders in {base_dir}")
 
-        obj_file = f"{folder_name}.obj"
-        png_file = f"{folder_name}.png"
+    dynamic_folder = max(all_dirs, key=os.path.getmtime)
+    folder_name = os.path.basename(dynamic_folder)
 
-        # Handle the .obj file
-        src_obj = os.path.join(dynamic_folder, obj_file)
-        dst_obj = os.path.join(obj_destination, obj_file)
-        if os.path.exists(src_obj):
-            if os.path.exists(dst_obj):
-                os.remove(dst_obj)
-            shutil.copy2(src_obj, dst_obj)
-            print(f"Copied {obj_file} to {obj_destination}")
-        else:
-            print(f"File not found: {obj_file}")
+    obj_candidates = [
+        os.path.join(dynamic_folder, f"{folder_name}.obj"),
+        os.path.join(dynamic_folder, "mesh.obj"),
+    ]
+    tex_candidates = []
+    for ext in (".png", ".jpg", ".jpeg"):
+        tex_candidates.append(os.path.join(dynamic_folder, f"{folder_name}{ext}"))
+        tex_candidates.append(os.path.join(dynamic_folder, f"texture{ext}"))
+    # also pick the first image file if names differ
+    tex_candidates += sorted(
+        [p for p in glob.glob(os.path.join(dynamic_folder, "*.*"))
+         if os.path.splitext(p)[1].lower() in [".png", ".jpg", ".jpeg"]],
+        key=os.path.getmtime, reverse=True
+    )
 
-        # Handle the .png file (copy only to png_destination1)
-        src_png = os.path.join(dynamic_folder, png_file)
-        dst_png = os.path.join(png_destination1, png_file)
-        if os.path.exists(src_png):
-            if os.path.exists(dst_png):
-                os.remove(dst_png)
-            shutil.copy2(src_png, dst_png)
-            print(f"Copied {png_file} to {png_destination1}")
-        else:
-            print(f"File not found: {png_file}")
+    # pick first existing obj
+    src_obj = next((p for p in obj_candidates if os.path.exists(p)), None)
+    if not src_obj:
+        raise FileNotFoundError(f"OBJ not found in {dynamic_folder}")
 
+    # pick first existing texture
+    src_tex = next((p for p in tex_candidates if os.path.exists(p)), None)
+    if not src_tex:
+        raise FileNotFoundError(f"Texture image (.png/.jpg) not found in {dynamic_folder}")
 
-        # Delete the dynamic folder
-        shutil.rmtree(dynamic_folder)
-        print(f"Deleted folder: {dynamic_folder}")
+    # copy obj
+    dst_obj = os.path.join(obj_destination, os.path.basename(src_obj))
+    if os.path.exists(dst_obj):
+        os.remove(dst_obj)
+    shutil.copy2(src_obj, dst_obj)
+    print(f"Copied {os.path.basename(dst_obj)} to {obj_destination}")
+    dst_tex = os.path.join(tex_destination, os.path.basename(src_tex))
+    if os.path.exists(dst_tex):
+        os.remove(dst_tex)
+    shutil.copy2(src_tex, dst_tex)
+    print(f"Copied {os.path.basename(dst_tex)} to {tex_destination}")
+    shutil.rmtree(dynamic_folder)
+    print(f"Deleted folder: {dynamic_folder}")
 
 
 # Use system's default Python interpreter
 python_executable = sys.executable
-python_37 = r"C:\Users\tamil\AppData\Local\Programs\Python\Python37\python.exe"
-python_311 = r"C:\Users\tamil\AppData\Local\Programs\Python\Python311\python.exe"
+import os
+
+python_37 = os.getenv('PYTHON_37_PATH')
+python_311 = os.getenv('PYTHON_311_PATH')
+
 
 
 
@@ -77,8 +95,6 @@ async def main_function(gender, websocket=None):
     async def run_command(step, step_index):
         print(f"\n🔧 Running Step {step_index + 1}: {step['title']} ({step['dir']})")
         if websocket:await websocket.send_json({"status": "progress","stepIndex": step_index,"title": step["title"]})
-        
-        # await send_progress({"status": "progress","stepIndex": step_index,"title": step["title"]})
         try:
             if callable(step["command"]):
                 step["command"]()
@@ -112,7 +128,6 @@ async def main_function(gender, websocket=None):
                 "aligned_images"
             ]
         },
-        #removing raw_image
         {
             "title": "Cleaning image",
             "dir": "hair_mapper/stylegan-encoder",
@@ -263,11 +278,30 @@ async def main_function(gender, websocket=None):
                 if os.path.isfile(os.path.join("Blender/ready to use model/head", f))]
             )
         },
+        {
+            "title": "Upload to S3",
+            "dir": ".",
+            "command": [
+                "python_311",
+                "s3_push_objs.py",
+                "--dir", "Blender/output",
+                "--bucket", "3dglbops",
+                "--prefix", "blender/outputs",
+                "--region", "ap-south-1",
+                "--public"
+            ]
+        },
+        {
+            "title": "Cleaning Up",
+            "dir": ".",
+            "command": lambda: (
+                [os.remove(f) for f in glob.glob("Blender/output/*.glb")]
+            ) and None
+        }
+
 
     ]
 
-    # Run each command
-        # Execute all steps with progress
     for index, step in enumerate(commands):
         success = await run_command(step, index)
         if not success:

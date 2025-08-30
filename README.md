@@ -78,15 +78,16 @@ Use this to install dependencies for older models:
 pip install -r requirements37.txt
 ```
 
-### B. Set up Python 3.11.0 Environment
-
-Use this for updated modules:
-
+```
 Use this if your facing a error on dlib 
 
 set CMAKE_GENERATOR=Ninja
 set CMAKE_ARGS=-DCMAKE_POLICY_VERSION_MINIMUM=3.5
 pip install dlib==19.24.2 --no-build-isolation
+```
+
+### B. Set up Python 3.11.0 Environment
+
 
 ```bash
 pip install -r requirements311.txt
@@ -96,6 +97,29 @@ pip install -r requirements311.txt
 
 ---
 
+### c. install blender
+
+```
+install blender 2.79
+```
+### .env config
+
+```
+fill out the .env file 
+```
+
+### check this folder 
+```
+texture/ input
+Blender/ready to use model/head
+hair_mapper/stylegan-encoder/aligned_images
+hair_mapper/stylegan-encoder/raw_images
+
+```
+
+```
+check for this folder sometimes git doesnt add empty folder soo it might will be removed if soo add these
+```
 ## ▶️ Running the Project
 
 ### 1. Prepare Input Image
@@ -111,8 +135,15 @@ pip install -r requirements311.txt
 From the project root directory, run:
 
 ```bash
-python docker_api.py
+uvicorn api_function:app --reload
 ```
+* if you want to call the normal function 
+or
+```bash
+uvicorn api_bat:app --reload
+```
+* if you want to call the .bat file 
+
 
 * This will start a local server and print an endpoint URL in the terminal.
 * The server listens for POST requests containing gender input.
@@ -129,30 +160,20 @@ You can test it using **Postman** or any REST client.
 
 * **URL:** `http://localhost:<your-port>/`
 
-* **Headers:**
-  `Content-Type: application/json`
 
-* **Body (raw JSON):**
+### B. Add Form Data
 
-```json
-{
-  "gender": "male"
-}
-```
+1. Go to the **Body** tab in Postman.
+2. Select **form-data**.
+3. Add the following form fields:
 
-> 🔁 You can also use `"female"` as the value for gender.
+| Key    | Value               |
+|--------|---------------------|
+| gender | male (or female)     |
+| file   | (Select an image file) |
 
----
-
-### B. Output Location
-
-* After a successful run, your 3D `.glb` model will be saved to:
-
-  ```
-  blender/output/
-  ```
-
----
+- **gender**: Specify `male` or `female` (case-sensitive, lowercase).
+- **file**: Select an image file from your local machine that you want to upload.
 
 ## ✅ Final Checklist
 
