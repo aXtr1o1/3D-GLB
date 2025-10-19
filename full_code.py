@@ -7,7 +7,7 @@ import glob
 import argparse
 import logging
 from dotenv import load_dotenv
-
+import asyncio
 load_dotenv()
 LOG_FILE = "pipeline.log"
 logging.basicConfig(
@@ -19,6 +19,68 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("Pipeline")
+
+async def _read_stream(stream, websocket, logger, step_index, is_stderr=False):
+    """Continuously read stdout/stderr and send to WebSocket."""
+    while True:
+        line = await stream.readline()
+        if not line:
+            break
+        text = line.decode(errors="replace").rstrip()
+        prefix = "STDERR" if is_stderr else "STDOUT"
+        logger.info(f"[{step_index:02d} {prefix}] {text}")
+        if websocket:
+            await websocket.send_json({
+                "status": "stream",
+                "stepIndex": step_index,
+                "stream": "stderr" if is_stderr else "stdout",
+                "line": text,
+            })
+
+async def run_and_stream(cmd, cwd, env, websocket, logger, step_index, title):
+    """Run a command and stream stdout/stderr live to WebSocket."""
+    logger.info(f"\n🔧 Running Step {step_index + 1}: {title} ({cwd})")
+    if websocket:
+        await websocket.send_json({
+            "status": "progress",
+            "stepIndex": step_index,
+            "title": title,
+            "cmd": " ".join(map(str, cmd))
+        })
+
+    proc = await asyncio.create_subprocess_exec(
+        *map(str, cmd),
+        cwd=cwd,
+        env=env,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    await asyncio.gather(
+        _read_stream(proc.stdout, websocket, logger, step_index, is_stderr=False),
+        _read_stream(proc.stderr, websocket, logger, step_index, is_stderr=True),
+    )
+
+    rc = await proc.wait()
+    if rc != 0:
+        msg = f"❌ Failed at step {step_index + 1} ({title}) - exit {rc}"
+        logger.error(msg)
+        if websocket:
+            await websocket.send_json({
+                "status": "error",
+                "stepIndex": step_index,
+                "message": msg,
+                "returncode": rc
+            })
+        return False
+    else:
+        if websocket:
+            await websocket.send_json({
+                "status": "done-step",
+                "stepIndex": step_index,
+                "message": "Step completed successfully"
+            })
+        return True
 
 def move_resources(src_dir,dst_dir):
     os.makedirs(dst_dir, exist_ok=True)
@@ -92,7 +154,29 @@ import os
 
 python_37 = os.getenv('PYTHON_37_PATH')
 python_311 = os.getenv('PYTHON_311_PATH')
+def fetch_latest_public_url(gender: str):
+    """
+    Query Supabase 'avatars' table for the latest row for this gender
+    and return its public_url (if available) and the full row.
+    """
+    from supabase import create_client, Client
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+    if not url or not key:
+        logger.warning("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set; cannot fetch public_url.")
+        return None, None
 
+    client: Client = create_client(url, key)
+    res = client.table("avatars") \
+        .select("*") \
+        .eq("gender", gender) \
+        .order("created_at", desc=True) \
+        .limit(1) \
+        .execute()
+    if res.data:
+        row = res.data[0]
+        return row.get("public_url"), row
+    return None, None
 
 
 
@@ -117,32 +201,12 @@ async def main_function(gender, websocket=None):
                 return True
             env = os.environ.copy()
             if step["title"] in ("Hair removal",):   # the step that compiles plugins
-                    env.update({
-                    "CUDA_HOME": "/usr/local/cuda-11.7",
-                    "CC": "/usr/bin/gcc-11",
-                    "CXX": "/usr/bin/g++-11",
-                    "CUDAHOSTCXX": "/usr/bin/g++-11",
-                    "TORCH_CUDA_ARCH_LIST": "7.5","NVCC_FLAGS": "-allow-unsupported-compiler",
-        "CUDAFLAGS":  "-allow-unsupported-compiler",
-        # (optional) Build more deterministically:
-        "MAX_JOBS": "1",
-                })
+                    env.update({"CUDA_HOME": "/usr/local/cuda-11.7","CC": "/usr/bin/gcc-11","CXX": "/usr/bin/g++-11","CUDAHOSTCXX": "/usr/bin/g++-11","TORCH_CUDA_ARCH_LIST": "7.5","NVCC_FLAGS": "-allow-unsupported-compiler",         "CUDAFLAGS":  "-allow-unsupported-compiler","MAX_JOBS": "1",})
             # Run and always show output
-            result = subprocess.run(
-                    step["command"],
-                    cwd=step["dir"],
-                    text=True,
-                    capture_output=True,
-                    env=env
-		)
-            if result.stdout:
-                print(result.stdout)
-            if result.stderr:
-                print(result.stderr, file=sys.stderr)
-            if result.returncode != 0:
-                await send_progress(f"❌ Failed at step: {' '.join(map(str, step['command']))} (exit {result.returncode})")
-                return False
-            return True
+	    ok = await run_and_stream(cmd=step["command"],cwd=step["dir"],env=env,websocket=websocket,logger=logger,step_index=step_index,title=step["title"])
+	    if not ok:
+    		return False
+	    return True
         except Exception as e:
             # logger.info the exception so CLI users see it
             import traceback
@@ -184,7 +248,7 @@ async def main_function(gender, websocket=None):
             "title": "Moving",
             "dir": ".",  
             "command": lambda: move_resources(
-                "hair_mapper/stylegan-encoder/aligned_images",
+python3.11 -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload                "hair_mapper/stylegan-encoder/aligned_images",
                 "hair_mapper/HairMapper/test_data/origin"
             )
         },
@@ -345,13 +409,29 @@ async def main_function(gender, websocket=None):
 
     ]
 
+    all_ok = True
     for index, step in enumerate(commands):
         success = await run_command(step, index)
         if not success:
+            all_ok = False
             break
 
-    await send_progress("✅ Avatar generation completed.")
+    # Always try to fetch a URL if upload step passed
+    public_url, row = fetch_latest_public_url(gender)
 
+    await send_progress("✅ Avatar generation completed.")
+    if websocket:
+    	await websocket.send_json({"status": "done", "message": "Pipeline finished!"})
+    if public_url:
+        await send_progress(f"Public GLB URL: {public_url}")
+
+    # Return object that your FastAPI route can send back to the client
+    return {
+        "status": "completed" if all_ok else "failed",
+        "gender": gender,
+        "outputs": [public_url] if public_url else [],
+        "db_row": row or {}
+    }
 if __name__ == "__main__":
     import asyncio
     ap = argparse.ArgumentParser(description="3D-GLB end-to-end runner")
@@ -369,4 +449,5 @@ if __name__ == "__main__":
         logger.info(f"Copied input image to ./input")
 
     # run the async pipeline
-    asyncio.run(main_function(args.gender))
+    res =  asyncio.run(main_function(args.gender))
+    logger.info(res)
