@@ -5,10 +5,20 @@ import shutil
 import os
 import glob
 import argparse
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
-
+LOG_FILE = "pipeline.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger("Pipeline")
 
 def move_resources(src_dir,dst_dir):
     os.makedirs(dst_dir, exist_ok=True)
@@ -66,14 +76,14 @@ def move_deca_result(base_dir, obj_destination, tex_destination):
     if os.path.exists(dst_obj):
         os.remove(dst_obj)
     shutil.copy2(src_obj, dst_obj)
-    print(f"Copied {os.path.basename(dst_obj)} to {obj_destination}")
+    logger.info(f"Copied {os.path.basename(dst_obj)} to {obj_destination}")
     dst_tex = os.path.join(tex_destination, os.path.basename(src_tex))
     if os.path.exists(dst_tex):
         os.remove(dst_tex)
     shutil.copy2(src_tex, dst_tex)
-    print(f"Copied {os.path.basename(dst_tex)} to {tex_destination}")
+    logger.info(f"Copied {os.path.basename(dst_tex)} to {tex_destination}")
     shutil.rmtree(dynamic_folder)
-    print(f"Deleted folder: {dynamic_folder}")
+    logger.info(f"Deleted folder: {dynamic_folder}")
 
 
 # Use system's default Python interpreter
@@ -90,15 +100,15 @@ python_311 = os.getenv('PYTHON_311_PATH')
 async def main_function(gender, websocket=None):
 
     async def send_progress(step_msg):
-        # Always print to console
-        print(step_msg)
+        # Always logger.info to console
+        logger.info(step_msg)
         # Additionally send to websocket if available
         if websocket:
             await websocket.send_json({"status": "progress", "message": step_msg})
 
     async def run_command(step, step_index):
         title = f"\n🔧 Running Step {step_index + 1}: {step['title']} ({step['dir']})"
-        print(title)
+        logger.info(title)
         if websocket:
             await websocket.send_json({"status": "progress","stepIndex": step_index,"title": step["title"]})
         try:
@@ -123,17 +133,17 @@ async def main_function(gender, websocket=None):
                     env=env
 		)
             if result.stdout:
-                print(result.stdout)
+                logger.info(result.stdout)
             if result.stderr:
-                print(result.stderr, file=sys.stderr)
+                logger.info(result.stderr, file=sys.stderr)
             if result.returncode != 0:
                 await send_progress(f"❌ Failed at step: {' '.join(map(str, step['command']))} (exit {result.returncode})")
                 return False
             return True
         except Exception as e:
-            # Print the exception so CLI users see it
+            # logger.info the exception so CLI users see it
             import traceback
-            traceback.print_exc()
+            traceback.logger.info_exc()
             await send_progress(f"🔥 Exception at {step['dir']}: {e}")
             return False
 
@@ -352,7 +362,7 @@ if __name__ == "__main__":
         if not os.path.isfile(args.image):
             raise FileNotFoundError(f"Image not found: {args.image}")
         shutil.copy2(args.image, os.path.join("input", os.path.basename(args.image)))
-        print(f"Copied input image to ./input")
+        logger.info(f"Copied input image to ./input")
 
     # run the async pipeline
     asyncio.run(main_function(args.gender))
