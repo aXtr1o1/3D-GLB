@@ -119,10 +119,13 @@ async def main_function(gender, websocket=None):
             if step["title"] in ("Hair removal",):   # the step that compiles plugins
                     env.update({
                     "CUDA_HOME": "/usr/local/cuda-11.7",
-                    "CC": "/usr/bin/gcc",
-                    "CXX": "/usr/bin/g++",
-                    "CUDAHOSTCXX": "/usr/bin/g++",
-                    "TORCH_CUDA_ARCH_LIST": "7.5",
+                    "CC": "/usr/bin/gcc-11",
+                    "CXX": "/usr/bin/g++-11",
+                    "CUDAHOSTCXX": "/usr/bin/g++-11",
+                    "TORCH_CUDA_ARCH_LIST": "7.5","NVCC_FLAGS": "-allow-unsupported-compiler",
+        "CUDAFLAGS":  "-allow-unsupported-compiler",
+        # (optional) Build more deterministically:
+        "MAX_JOBS": "1",
                 })
             # Run and always show output
             result = subprocess.run(
@@ -133,9 +136,9 @@ async def main_function(gender, websocket=None):
                     env=env
 		)
             if result.stdout:
-                logger.info(result.stdout)
+                print(result.stdout)
             if result.stderr:
-                logger.info(result.stderr, file=sys.stderr)
+                print(result.stderr, file=sys.stderr)
             if result.returncode != 0:
                 await send_progress(f"❌ Failed at step: {' '.join(map(str, step['command']))} (exit {result.returncode})")
                 return False
@@ -143,7 +146,7 @@ async def main_function(gender, websocket=None):
         except Exception as e:
             # logger.info the exception so CLI users see it
             import traceback
-            traceback.logger.info_exc()
+            traceback.print_exc()
             await send_progress(f"🔥 Exception at {step['dir']}: {e}")
             return False
 
@@ -326,7 +329,8 @@ async def main_function(gender, websocket=None):
                 "--dir", "Blender/output",
                 "--bucket", os.getenv("SUPABASE_BUCKET", "three-d-outputs"),
                 "--prefix", os.getenv("SUPABASE_PREFIX", "blender/outputs"),
-                "--public"  # remove this flag if you prefer signed URLs on private bucket
+ 		"--gender", gender,
+                "--public"  
             ]
         },
 
