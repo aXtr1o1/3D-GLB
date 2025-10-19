@@ -1,14 +1,13 @@
+# app.py
 import os
-import shutil
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-# Import your pipeline's async function
-# Make sure full_code.py is in the same directory (repo root).
+# your pipeline (must expose: async def main_function(gender, websocket=None))
 from full_code import main_function
 
 APP_ROOT = Path(__file__).parent.resolve()
@@ -17,18 +16,45 @@ INPUT_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="3D-GLB Pipeline API", version="1.0.0")
 
-# Optional CORS (adjust origins to your needs)
+# ---- CORS (loose for dev; tighten for prod) ----
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten this in production
+    allow_origins=["*"],         # change to your domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ---- Simple test page (optional) ----
+@app.get("/", response_class=HTMLResponse)
+def index():
+    return """
+<!doctype html>
+<html>
+  <head><meta charset="utf-8"><title>3D-GLB WS Test</title></head>
+  <body>
+    <h1>WebSocket Pipeline Test</h1>
+    <p>Open the console to see messages.</p>
+    <script>
+      const ws = new WebSocket(`ws://${location.host}/ws`);
+      ws.onopen = () => {
+        console.log("WS open");
+        // Tell server which gender to run
+        ws.send(JSON.stringify({ gender: "male" }));
+      };
+      ws.onmessage = (ev) => {
+        console.log("WS message:", ev.data);
+      };
+      ws.onclose = () => console.log("WS closed");
+      ws.onerror = (e) => console.error("WS error", e);
+    </script>
+  </body>
+</html>
+    """
+
+# ---- Healthcheck ----
 @app.get("/health")
 def health():
-    # Basic sanity checks: Python paths via .env (optional)
     py37 = os.getenv("PYTHON_37_PATH")
     py311 = os.getenv("PYTHON_311_PATH")
     return {
@@ -40,48 +66,70 @@ def health():
         "input_files": sorted([p.name for p in INPUT_DIR.glob("*")]),
     }
 
+# ---- HTTP upload + run (no streaming over HTTP; see /ws for live stream) ----
 @app.post("/generate")
 async def generate(
-    gender: str = Form(..., regex="^(male|female)$"),
-    image: Optional[UploadFile] = File(None)
+    gender: str = Form(..., pattern="^(male|female)$"),
+    image: Optional[UploadFile] = File(None),
 ):
     """
-    Upload an image (optional if already present in ./input) and run the pipeline.
-    Returns JSON when finished. For live progress, use the /ws endpoint.
+    Use this if you just want a single HTTP request/response.
+    - Saves the uploaded image (if provided) into ./input
+    - Runs the pipeline to completion
+    - Returns the best-known outputs (e.g., public GLB URL if your uploader wrote it)
+    For live logs, use /ws instead.
     """
+    # Save image if included
     if image is not None:
-        # Save uploaded image into ./input (pipeline reads from here)
-        # Preserve original filename
-        dest = INPUT_DIR / image.filename
-        with dest.open("wb") as f:
-            shutil.copyfileobj(image.file, f)
+        dest_path = INPUT_DIR / image.filename
+        with dest_path.open("wb") as f:
+            f.write(await image.read())
 
-    # Run the pipeline; this will print progress to server logs.
-    # For live progress over WebSocket, use /ws.
+    # Run the pipeline (server log will show progress; /ws streams it)
     try:
         await main_function(gender)
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=f"Pipeline missing resource: {e}")
     except Exception as e:
-        # Surface anything else as 500
         raise HTTPException(status_code=500, detail=f"Pipeline error: {e}")
 
-    # If you want to return a specific artifact path, adjust here:
-    output_dir = APP_ROOT / "Blender" / "output"
-    outputs = sorted([str(p) for p in output_dir.glob("*.glb")]) if output_dir.exists() else []
+    # Try to return a public URL if your uploader wrote a manifest
+    # (Adjust this to match whatever your supabase_upload.py writes.)
+    manifest = APP_ROOT / "Blender" / "output" / "manifest.json"
+    outputs = []
+    if manifest.exists():
+        try:
+            import json
+            with manifest.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+                # Expecting a top-level "files" list with {"public_url": "..."} items
+                outputs = [f.get("public_url") or f.get("signed_url") for f in data.get("files", []) if f]
+                outputs = [u for u in outputs if u]  # remove Nones
+        except Exception:
+            pass
+    else:
+        # fallback: any .glb (not public URLs; just paths)
+        out_dir = APP_ROOT / "Blender" / "output"
+        if out_dir.exists():
+            outputs = sorted([str(p) for p in out_dir.glob("*.glb")])
+
     return JSONResponse({"status": "completed", "gender": gender, "outputs": outputs})
 
+# ---- WebSocket with live streaming ----
 @app.websocket("/ws")
 async def ws_progress(websocket: WebSocket):
     """
-    WebSocket for live progress streaming.
-    Client flow:
-      1) Upload the image first using POST /generate (or copy to ./input)
-      2) Connect here, then send a JSON message like: {"gender":"male"}
+    1) Client connects via WS
+    2) Immediately sends: {"gender":"male"|"female"}
+    3) Server streams each step line-by-line as JSON messages:
+       - {"status":"progress","stepIndex":...,"title":...}
+       - {"status":"stream","stepIndex":...,"stream":"stdout|stderr","line":"..."}
+       - {"status":"done-step",...}
+       - {"status":"error",...}
+       - {"status":"done","message":"..."}
     """
     await websocket.accept()
     try:
-        # Wait for the client to send a small JSON telling us the gender
         init = await websocket.receive_json()
         gender = init.get("gender")
         if gender not in ("male", "female"):
@@ -89,16 +137,28 @@ async def ws_progress(websocket: WebSocket):
             await websocket.close(code=1003)
             return
 
-        # Kick off the pipeline, passing the websocket so your code streams progress
+        # Kick off the pipeline; it will call websocket.send_json(...) for every line
         await main_function(gender, websocket=websocket)
-        await websocket.send_json({"status": "done", "message": "✅ Avatar generation completed."})
+
+        # Optionally send final manifest/public URLs (same logic as /generate)
+        from json import load
+        manifest = APP_ROOT / "Blender" / "output" / "manifest.json"
+        outputs = []
+        if manifest.exists():
+            try:
+                with manifest.open("r", encoding="utf-8") as fh:
+                    data = load(fh)
+                    outputs = [f.get("public_url") or f.get("signed_url") for f in data.get("files", []) if f]
+                    outputs = [u for u in outputs if u]
+            except Exception:
+                outputs = []
+        await websocket.send_json({"status": "done", "message": "Pipeline finished!", "outputs": outputs})
         await websocket.close(code=1000)
 
     except WebSocketDisconnect:
-        # Client went away — nothing to do (your pipeline may continue)
+        # Client disconnected; you can choose to stop/ignore the running job.
         return
     except Exception as e:
-        # Send the error to client, then close
         try:
             await websocket.send_json({"status": "error", "message": str(e)})
         finally:
