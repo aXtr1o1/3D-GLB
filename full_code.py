@@ -105,13 +105,23 @@ async def main_function(gender, websocket=None):
             if callable(step["command"]):
                 step["command"]()
                 return True
+            env = os.environ.copy()
+            if step["title"] in ("Hair removal",):   # the step that compiles plugins
+                    env.update({
+                    "CUDA_HOME": "/usr/local/cuda-11.7",
+                    "CC": "/usr/bin/gcc",
+                    "CXX": "/usr/bin/g++",
+                    "CUDAHOSTCXX": "/usr/bin/g++",
+                    "TORCH_CUDA_ARCH_LIST": "7.5",
+                })
             # Run and always show output
             result = subprocess.run(
-                step["command"],
-                cwd=step["dir"],
-                text=True,
-                capture_output=True
-            )
+                    step["command"],
+                    cwd=step["dir"],
+                    text=True,
+                    capture_output=True,
+                    env=env
+		)
             if result.stdout:
                 print(result.stdout)
             if result.stderr:
