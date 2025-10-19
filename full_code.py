@@ -88,26 +88,45 @@ python_311 = os.getenv('PYTHON_311_PATH')
 
 
 async def main_function(gender, websocket=None):
+
     async def send_progress(step_msg):
+        # Always print to console
+        print(step_msg)
+        # Additionally send to websocket if available
         if websocket:
             await websocket.send_json({"status": "progress", "message": step_msg})
 
     async def run_command(step, step_index):
-        print(f"\n🔧 Running Step {step_index + 1}: {step['title']} ({step['dir']})")
-        if websocket:await websocket.send_json({"status": "progress","stepIndex": step_index,"title": step["title"]})
+        title = f"\n🔧 Running Step {step_index + 1}: {step['title']} ({step['dir']})"
+        print(title)
+        if websocket:
+            await websocket.send_json({"status": "progress","stepIndex": step_index,"title": step["title"]})
         try:
             if callable(step["command"]):
                 step["command"]()
-            else:
-                result = subprocess.run(step["command"], cwd=step["dir"])
-                if result.returncode != 0:
-                    await send_progress(f"❌ Failed at step: {' '.join(step['command'])}")
-                    return False
+                return True
+            # Run and always show output
+            result = subprocess.run(
+                step["command"],
+                cwd=step["dir"],
+                text=True,
+                capture_output=True
+            )
+            if result.stdout:
+                print(result.stdout)
+            if result.stderr:
+                print(result.stderr, file=sys.stderr)
+            if result.returncode != 0:
+                await send_progress(f"❌ Failed at step: {' '.join(map(str, step['command']))} (exit {result.returncode})")
+                return False
+            return True
         except Exception as e:
-            await send_progress(f"🔥 Exception at {step['dir']}: {str(e)}")
+            # Print the exception so CLI users see it
+            import traceback
+            traceback.print_exc()
+            await send_progress(f"🔥 Exception at {step['dir']}: {e}")
             return False
-        return True
-        
+
 
     commands = [
         {
@@ -279,18 +298,18 @@ async def main_function(gender, websocket=None):
             )
         },
         {
-            "title": "Upload to S3",
+            "title": "Upload to Supabase",
             "dir": ".",
             "command": [
-                "python_311",
-                "s3_push_objs.py",
+                python_311,
+                "supabase_upload.py",
                 "--dir", "Blender/output",
-                "--bucket", "3dglbops",
-                "--prefix", "blender/outputs",
-                "--region", "ap-south-1",
-                "--public"
+                "--bucket", os.getenv("SUPABASE_BUCKET", "three-d-outputs"),
+                "--prefix", os.getenv("SUPABASE_PREFIX", "blender/outputs"),
+                "--public"  # remove this flag if you prefer signed URLs on private bucket
             ]
         },
+
         {
             "title": "Cleaning Up",
             "dir": ".",
@@ -308,3 +327,22 @@ async def main_function(gender, websocket=None):
             break
 
     await send_progress("✅ Avatar generation completed.")
+
+if __name__ == "__main__":
+    import asyncio
+    ap = argparse.ArgumentParser(description="3D-GLB end-to-end runner")
+    ap.add_argument("--gender", choices=["male", "female"], required=True)
+    # accept optional image arg if your pipeline expects you to put it in input/
+    ap.add_argument("--image", help="absolute path to selfie; will be copied to input/ if provided")
+    args = ap.parse_args()
+
+    # if --image is given, drop it into expected input/ folder
+    if args.image:
+        os.makedirs("input", exist_ok=True)
+        if not os.path.isfile(args.image):
+            raise FileNotFoundError(f"Image not found: {args.image}")
+        shutil.copy2(args.image, os.path.join("input", os.path.basename(args.image)))
+        print(f"Copied input image to ./input")
+
+    # run the async pipeline
+    asyncio.run(main_function(args.gender))
